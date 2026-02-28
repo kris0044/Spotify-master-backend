@@ -38,11 +38,9 @@ app.use(
 	})
 );
 
-app.use(express.json()); // to parse req.body
+app.use(express.json()); 
 
-// ✅ FIXED: Clerk middleware with correct configuration
-// The secret key should be in your .env and Clerk reads it automatically
-// Just pass the options you need
+
 app.use(extractClerkAuth);
 
 app.use((req, res, next) => {
