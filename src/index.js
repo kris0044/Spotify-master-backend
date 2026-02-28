@@ -34,7 +34,6 @@ initializeSocket(httpServer);
 app.use(
 	cors({
 		origin: "https://spotify-master.onrender.com/",
-		credentials: true,
 	})
 );
 

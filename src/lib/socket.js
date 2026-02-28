@@ -5,7 +5,6 @@ export const initializeSocket = (server) => {
 	const io = new Server(server, {
 		cors: {
 			origin: "https://spotify-master.onrender.com/",
-			credentials: true,
 		},
 	});
 
