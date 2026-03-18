@@ -37,61 +37,43 @@ export const protectRoute = (req, res, next) => {
 
 export const requireAdmin = async (req, res, next) => {
 	try {
-		// First check if user is authenticated
 		if (!req.auth?.userId) {
-			return res
-				.status(401)
-				.json({ message: "Unauthorized - you must be logged in" });
+			return res.status(401).json({ message: "Unauthorized - you must be logged in" });
 		}
 
-		// Try to get user from Clerk
+		const { User } = await import("../models/user.model.js");
+		const existingUser = await User.findOne({ clerkId: req.auth.userId });
+
+		// Fast path: trust persisted admin role first.
+		if (existingUser?.role === "admin") {
+			return next();
+		}
+
+		let clerkUser = null;
 		let isAdminByEmail = false;
 		try {
-			const clerkUser = await clerkClient.users.getUser(req.auth.userId);
-			isAdminByEmail =
-				clerkUser.primaryEmailAddress?.emailAddress === process.env.ADMIN_EMAIL;
+			clerkUser = await clerkClient.users.getUser(req.auth.userId);
+			isAdminByEmail = clerkUser.primaryEmailAddress?.emailAddress === process.env.ADMIN_EMAIL;
 		} catch (clerkError) {
-			// If Clerk API fails, just continue to check database role
 			console.log("Clerk API error:", clerkError.message);
 		}
 
-		// Also check database role
-		const { User } = await import("../models/user.model.js");
-		let dbUser = await User.findOne({ clerkId: req.auth.userId });
-
-		// If user doesn't exist in database, create it
-		if (!dbUser) {
-			try {
-				const clerkUser = await clerkClient.users.getUser(req.auth.userId);
-				const isAdminEmail = clerkUser.primaryEmailAddress?.emailAddress === process.env.ADMIN_EMAIL;
-				dbUser = await User.create({
+		if (isAdminByEmail) {
+			if (!existingUser) {
+				await User.create({
 					clerkId: req.auth.userId,
-					fullName: `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || "User",
-					imageUrl: clerkUser.imageUrl || "",
-					role: isAdminEmail ? "admin" : "user",
+					fullName: `${clerkUser?.firstName || ""} ${clerkUser?.lastName || ""}`.trim() || "Admin",
+					imageUrl: clerkUser?.imageUrl || "",
+					role: "admin",
 				});
-			} catch (clerkError) {
-				return res
-					.status(403)
-					.json({ message: "User not found. Please sign in again." });
+			} else if (existingUser.role !== "admin") {
+				existingUser.role = "admin";
+				await existingUser.save();
 			}
+			return next();
 		}
 
-		// Ensure user has a role
-		if (!dbUser.role) {
-			dbUser.role = isAdminByEmail ? "admin" : "user";
-			await dbUser.save();
-		}
-
-		const isAdminByRole = dbUser.role === "admin";
-
-		if (!isAdminByEmail && !isAdminByRole) {
-			return res
-				.status(403)
-				.json({ message: "Unauthorized - admin only" });
-		}
-
-		next();
+		return res.status(403).json({ message: "Unauthorized - admin only" });
 	} catch (error) {
 		next(error);
 	}

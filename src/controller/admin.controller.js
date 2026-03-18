@@ -146,63 +146,42 @@ export const approveAllExistingSongs = async (req, res, next) => {
 
 export const checkAdmin = async (req, res, next) => {
 	try {
-		// If no auth object or no userId, user is not authenticated
 		if (!req.auth || !req.auth.userId) {
-			console.log("❌ No auth or userId found");
 			return res.status(200).json({ admin: false });
 		}
 
-		console.log("✅ Checking admin status for userId:", req.auth.userId);
-
-		// Check if user is admin by email
 		let isAdminByEmail = false;
 		let clerkUser = null;
-		
+
 		try {
 			const { clerkClient } = await import("@clerk/express");
 			clerkUser = await clerkClient.users.getUser(req.auth.userId);
 			const userEmail = clerkUser.primaryEmailAddress?.emailAddress;
-			
-			console.log("📧 User email:", userEmail);
-			console.log("🔑 Admin email:", process.env.ADMIN_EMAIL);
-			
 			isAdminByEmail = userEmail === process.env.ADMIN_EMAIL;
-			console.log("📋 Is admin by email?", isAdminByEmail);
 		} catch (clerkError) {
-			console.error("❌ Clerk API error:", clerkError.message);
-			// Continue to check database, don't return false yet
+			console.error("Clerk API error:", clerkError.message);
 		}
 
-		// Check database role
 		const { User } = await import("../models/user.model.js");
-		const dbUser = await User.findOne({ clerkId: req.auth.userId });
-		
-		console.log("💾 Database user found?", !!dbUser);
-		console.log("👤 Database user role:", dbUser?.role);
-		
-		const isAdminByRole = dbUser?.role === "admin";
-		console.log("📋 Is admin by role?", isAdminByRole);
+		let dbUser = await User.findOne({ clerkId: req.auth.userId });
 
-		const isAdmin = isAdminByEmail || isAdminByRole;
-		
-		console.log("🎯 FINAL RESULT - Is Admin?", isAdmin);
-
-		res.status(200).json({ admin: isAdmin });
-	} catch (error) {
-		// Log the full error so you can see what's wrong
-		console.error("❌ CRITICAL ERROR in checkAdmin:", error);
-		console.error("Stack trace:", error.stack);
-		
-		// Return error details in development
-		if (process.env.NODE_ENV === 'development') {
-			res.status(500).json({ 
-				admin: false, 
-				error: error.message,
-				details: "Check server logs"
-			});
-		} else {
-			res.status(200).json({ admin: false });
+		if (isAdminByEmail && dbUser?.role !== "admin") {
+			if (!dbUser) {
+				dbUser = await User.create({
+					clerkId: req.auth.userId,
+					fullName: `${clerkUser?.firstName || ""} ${clerkUser?.lastName || ""}`.trim() || "Admin",
+					imageUrl: clerkUser?.imageUrl || "",
+					role: "admin",
+				});
+			} else {
+				dbUser.role = "admin";
+				await dbUser.save();
+			}
 		}
+
+		return res.status(200).json({ admin: isAdminByEmail || dbUser?.role === "admin" });
+	} catch (error) {
+		next(error);
 	}
 };
 
@@ -415,3 +394,4 @@ export const deleteUser = async (req, res, next) => {
 		next(error);
 	}
 };
+

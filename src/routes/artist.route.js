@@ -1,5 +1,8 @@
 import { Router } from "express";
 import {
+	deleteArtistSong,
+	getArtistDashboard,
+	getArtistSongs,
 	uploadSong,
 	uploadAlbum,
 	getMyUploads,
@@ -11,7 +14,10 @@ const router = Router();
 router.use(protectRoute);
 router.use(requireArtist);
 
+router.get("/dashboard", getArtistDashboard);
+router.get("/songs", getArtistSongs);
 router.post("/songs", uploadSong);
+router.delete("/songs/:id", deleteArtistSong);
 router.post("/albums", uploadAlbum);
 router.get("/uploads", getMyUploads);
 

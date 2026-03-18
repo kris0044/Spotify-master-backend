@@ -1,33 +1,33 @@
 import { Server } from "socket.io";
 import { Message } from "../models/message.model.js";
 
+let ioInstance = null;
+const userSockets = new Map(); // { userId: socketId }
+const userActivities = new Map(); // { userId: activity }
+
 export const initializeSocket = (server) => {
-	const io = new Server(server, {
+	ioInstance = new Server(server, {
 		cors: {
 			origin: "*",
 		},
 	});
 
-	const userSockets = new Map(); // { userId: socketId}
-	const userActivities = new Map(); // {userId: activity}
-
-	io.on("connection", (socket) => {
+	ioInstance.on("connection", (socket) => {
 		socket.on("user_connected", (userId) => {
 			userSockets.set(userId, socket.id);
 			userActivities.set(userId, "Idle");
 
 			// broadcast to all connected sockets that this user just logged in
-			io.emit("user_connected", userId);
+			ioInstance.emit("user_connected", userId);
 
 			socket.emit("users_online", Array.from(userSockets.keys()));
-
-			io.emit("activities", Array.from(userActivities.entries()));
+			ioInstance.emit("activities", Array.from(userActivities.entries()));
 		});
 
 		socket.on("update_activity", ({ userId, activity }) => {
 			console.log("activity updated", userId, activity);
 			userActivities.set(userId, activity);
-			io.emit("activity_updated", { userId, activity });
+			ioInstance.emit("activity_updated", { userId, activity });
 		});
 
 		socket.on("send_message", async (data) => {
@@ -43,7 +43,7 @@ export const initializeSocket = (server) => {
 				// send to receiver in realtime, if they're online
 				const receiverSocketId = userSockets.get(receiverId);
 				if (receiverSocketId) {
-					io.to(receiverSocketId).emit("receive_message", message);
+					ioInstance.to(receiverSocketId).emit("receive_message", message);
 				}
 
 				socket.emit("message_sent", message);
@@ -56,7 +56,6 @@ export const initializeSocket = (server) => {
 		socket.on("disconnect", () => {
 			let disconnectedUserId;
 			for (const [userId, socketId] of userSockets.entries()) {
-				// find disconnected user
 				if (socketId === socket.id) {
 					disconnectedUserId = userId;
 					userSockets.delete(userId);
@@ -65,8 +64,19 @@ export const initializeSocket = (server) => {
 				}
 			}
 			if (disconnectedUserId) {
-				io.emit("user_disconnected", disconnectedUserId);
+				ioInstance.emit("user_disconnected", disconnectedUserId);
 			}
 		});
 	});
+};
+
+export const emitToUser = (userId, eventName, payload) => {
+	if (!ioInstance || !userId) {
+		return;
+	}
+
+	const socketId = userSockets.get(userId);
+	if (socketId) {
+		ioInstance.to(socketId).emit(eventName, payload);
+	}
 };

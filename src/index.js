@@ -20,6 +20,9 @@ import statRoutes from "./routes/stat.route.js";
 import playlistRoutes from "./routes/playlist.route.js";
 import favoriteRoutes from "./routes/favorite.route.js";
 import artistRoutes from "./routes/artist.route.js";
+import historyRoutes from "./routes/history.route.js";
+import recommendationRoutes from "./routes/recommendation.route.js";
+import followRoutes from "./routes/follow.route.js";
 import { extractClerkAuth } from "./middleware/extractClerkAuth.js";
 
 dotenv.config();
@@ -37,19 +40,18 @@ app.use(
 	})
 );
 
-app.use(express.json()); 
-
+app.use(express.json());
 
 app.use(extractClerkAuth);
 
 app.use((req, res, next) => {
-  console.log("🔍 Debug middleware:", {
-    path: req.path,
-    hasAuth: !!req.auth,
-    userId: req.auth?.userId,
-    authHeader: req.headers.authorization ? "present" : "missing"
-  });
-  next();
+	console.log("Debug middleware:", {
+		path: req.path,
+		hasAuth: !!req.auth,
+		userId: req.auth?.userId,
+		authHeader: req.headers.authorization ? "present" : "missing",
+	});
+	next();
 });
 
 app.use(
@@ -73,7 +75,7 @@ cron.schedule("0 * * * *", () => {
 				return;
 			}
 			for (const file of files) {
-				fs.unlink(path.join(tempDir, file), (err) => {});
+				fs.unlink(path.join(tempDir, file), () => {});
 			}
 		});
 	}
@@ -88,6 +90,9 @@ app.use("/api/stats", statRoutes);
 app.use("/api/playlists", playlistRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/artist", artistRoutes);
+app.use("/api/history", historyRoutes);
+app.use("/api/recommendations", recommendationRoutes);
+app.use("/api", followRoutes);
 
 if (process.env.NODE_ENV === "production") {
 	app.use(express.static(path.join(__dirname, "../frontend/dist")));
@@ -102,9 +107,9 @@ app.use((err, req, res, next) => {
 	if (req.path === "/api/admin/check" && (err.status === 401 || err.message?.includes("Unauthorized"))) {
 		return res.status(200).json({ admin: false });
 	}
-	
-	res.status(err.status || 500).json({ 
-		message: process.env.NODE_ENV === "production" ? "Internal server error" : err.message 
+
+	res.status(err.status || 500).json({
+		message: process.env.NODE_ENV === "production" ? "Internal server error" : err.message,
 	});
 });
 
