@@ -4,6 +4,7 @@ import { emitToUser } from "../lib/socket.js";
 
 export const getAllSongs = async (req, res, next) => {
 	try {
+		const { genre, search, limit, offset } = req.query;
 		// Only show approved songs to regular users
 		// For backward compatibility: treat undefined/null isApproved as approved
 		const filter = req.user?.role === "admin"
@@ -15,9 +16,34 @@ export const getAllSongs = async (req, res, next) => {
 					{ isApproved: null },
 				],
 			};
+
+		if (genre) {
+			filter.genre = { $regex: `^${String(genre).trim()}$`, $options: "i" };
+		}
+
+		if (search) {
+			filter.$and = [
+				...(filter.$and || []),
+				{
+					$or: [
+						{ title: { $regex: String(search).trim(), $options: "i" } },
+						{ artist: { $regex: String(search).trim(), $options: "i" } },
+						{ genre: { $regex: String(search).trim(), $options: "i" } },
+					],
+				},
+			];
+		}
 		// -1 = Descending => newest -> oldest
 		// 1 = Ascending => oldest -> newest
-		const songs = await Song.find(filter).sort({ createdAt: -1 });
+		const songsQuery = Song.find(filter).sort({ createdAt: -1 });
+		if (limit !== undefined) {
+			songsQuery.limit(Math.max(Number(limit) || 0, 0));
+		}
+		if (offset !== undefined) {
+			songsQuery.skip(Math.max(Number(offset) || 0, 0));
+		}
+
+		const songs = await songsQuery;
 		res.json(songs);
 	} catch (error) {
 		next(error);
@@ -50,6 +76,7 @@ export const getFeaturedSongs = async (req, res, next) => {
 					_id: 1,
 					title: 1,
 					artist: 1,
+					genre: 1,
 					imageUrl: 1,
 					audioUrl: 1,
 				},
@@ -87,6 +114,7 @@ export const getMadeForYouSongs = async (req, res, next) => {
 					_id: 1,
 					title: 1,
 					artist: 1,
+					genre: 1,
 					imageUrl: 1,
 					audioUrl: 1,
 				},
@@ -128,6 +156,7 @@ export const getTrendingSongs = async (req, res, next) => {
 					_id: 1,
 					title: 1,
 					artist: 1,
+					genre: 1,
 					imageUrl: 1,
 					audioUrl: 1,
 					playCount: 1,

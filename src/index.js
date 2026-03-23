@@ -23,6 +23,7 @@ import artistRoutes from "./routes/artist.route.js";
 import historyRoutes from "./routes/history.route.js";
 import recommendationRoutes from "./routes/recommendation.route.js";
 import followRoutes from "./routes/follow.route.js";
+import feedbackRoutes from "./routes/feedback.route.js";
 import { extractClerkAuth } from "./middleware/extractClerkAuth.js";
 
 dotenv.config();
@@ -93,6 +94,7 @@ app.use("/api/artist", artistRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/recommendations", recommendationRoutes);
 app.use("/api", followRoutes);
+app.use("/api/feedback", feedbackRoutes);
 
 if (process.env.NODE_ENV === "production") {
 	app.use(express.static(path.join(__dirname, "../frontend/dist")));

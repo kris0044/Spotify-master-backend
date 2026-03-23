@@ -14,6 +14,7 @@ import {
 	rejectAlbum,
 	getPendingSongs,
 	getPendingAlbums,
+	getDashboardAnalytics,
 	getAllUsers,
 	updateUser,
 	deleteUser,
@@ -54,5 +55,8 @@ router.get("/albums/pending", getPendingAlbums);
 router.get("/users", getAllUsers);
 router.put("/users/:id", createInvalidationMiddleware(["stats:list"]), updateUser);
 router.delete("/users/:id", createInvalidationMiddleware(["stats:list"]), deleteUser);
+
+// Dashboard analytics
+router.get("/analytics", getDashboardAnalytics);
 
 export default router;

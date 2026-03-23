@@ -67,7 +67,7 @@ export const uploadSong = async (req, res, next) => {
 			return res.status(404).json({ message: "User not found" });
 		}
 
-		const { title, artist, albumId, duration } = req.body;
+		const { title, artist, genre, albumId, duration } = req.body;
 		const audioFile = req.files.audioFile;
 		const imageFile = req.files.imageFile;
 
@@ -77,6 +77,7 @@ export const uploadSong = async (req, res, next) => {
 		const song = new Song({
 			title,
 			artist,
+			genre: genre?.trim() || null,
 			audioUrl,
 			imageUrl,
 			duration,
@@ -113,18 +114,20 @@ export const uploadAlbum = async (req, res, next) => {
 			return res.status(404).json({ message: "User not found" });
 		}
 
-		const { title, artist, releaseYear } = req.body;
-		const { imageFile } = req.files;
+		const { title, artist, genre, releaseYear } = req.body;
+		const { imageFile } = req.files || {};
 
 		if (!imageFile) {
 			return res.status(400).json({ message: "Please upload album image" });
 		}
 
 		const imageUrl = await uploadToCloudinary(imageFile);
+		const parsedSongs = req.body.songs ? JSON.parse(req.body.songs) : [];
 
 		const album = new Album({
 			title,
 			artist,
+			genre: genre?.trim() || null,
 			imageUrl,
 			releaseYear,
 			uploadedBy: user._id,
@@ -132,9 +135,44 @@ export const uploadAlbum = async (req, res, next) => {
 		});
 
 		await album.save();
-		await invalidateCacheByPrefixes(RESOURCE_CACHE_PREFIXES);
+		const createdSongs = [];
 
-		res.status(201).json(album);
+		for (let index = 0; index < parsedSongs.length; index += 1) {
+			const songInput = parsedSongs[index];
+			const audioFile = req.files?.[`audioFile_${index}`];
+			const songImageFile = req.files?.[`imageFile_${index}`] || imageFile;
+
+			if (!audioFile) {
+				continue;
+			}
+
+			const audioUrl = await uploadToCloudinary(audioFile);
+			const songImageUrl = await uploadToCloudinary(songImageFile);
+
+			const song = await Song.create({
+				title: songInput.title,
+				artist: songInput.artist || artist,
+				genre: songInput.genre?.trim() || genre?.trim() || null,
+				audioUrl,
+				imageUrl: songImageUrl,
+				duration: Number(songInput.duration) || 0,
+				albumId: album._id,
+				uploadedBy: user._id,
+				isApproved: false,
+			});
+
+			createdSongs.push(song._id);
+		}
+
+		if (createdSongs.length) {
+			album.songs = createdSongs;
+			await album.save();
+		}
+
+		await invalidateCacheByPrefixes(RESOURCE_CACHE_PREFIXES);
+		const populatedAlbum = await Album.findById(album._id).populate("songs");
+
+		res.status(201).json(populatedAlbum);
 	} catch (error) {
 		console.log("Error in uploadAlbum", error);
 		next(error);
@@ -166,7 +204,7 @@ export const getMyUploads = async (req, res, next) => {
 export const getArtistSongs = async (req, res, next) => {
 	try {
 		const songs = await Song.find({ uploadedBy: req.user._id })
-			.select("title artist imageUrl audioUrl duration albumId isApproved playCount createdAt updatedAt")
+			.select("title artist genre imageUrl audioUrl duration albumId isApproved playCount createdAt updatedAt")
 			.sort({ createdAt: -1 });
 
 		res.status(200).json(songs);

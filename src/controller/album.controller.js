@@ -3,8 +3,19 @@ import { Song } from "../models/song.model.js";
 
 export const getAllAlbums = async (req, res, next) => {
 	try {
+		const { genre, search } = req.query;
 		// Only show approved albums to regular users
 		const filter = req.user?.role === "admin" ? {} : { isApproved: true };
+		if (genre) {
+			filter.genre = { $regex: `^${String(genre).trim()}$`, $options: "i" };
+		}
+		if (search) {
+			filter.$or = [
+				{ title: { $regex: String(search).trim(), $options: "i" } },
+				{ artist: { $regex: String(search).trim(), $options: "i" } },
+				{ genre: { $regex: String(search).trim(), $options: "i" } },
+			];
+		}
 		const albums = await Album.find(filter).sort({ createdAt: -1 });
 		res.status(200).json(albums);
 	} catch (error) {

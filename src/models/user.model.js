@@ -15,10 +15,14 @@ const userSchema = new mongoose.Schema(
 			required: true,
 			unique: true,
 		},
-				role: {
+		role: {
 			type: String,
 			enum: ["user", "admin", "artist"],
 			default: "user",
+		},
+		newsletterSubscribed: {
+			type: Boolean,
+			default: false,
 		},
 	},
 	{ timestamps: true } //  createdAt, updatedAt
