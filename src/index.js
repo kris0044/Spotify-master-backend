@@ -24,6 +24,7 @@ import historyRoutes from "./routes/history.route.js";
 import recommendationRoutes from "./routes/recommendation.route.js";
 import followRoutes from "./routes/follow.route.js";
 import feedbackRoutes from "./routes/feedback.route.js";
+import publicMusicRoutes from "./routes/publicMusic.route.js";
 import { extractClerkAuth } from "./middleware/extractClerkAuth.js";
 
 dotenv.config();
@@ -31,6 +32,10 @@ dotenv.config();
 const __dirname = path.resolve();
 const app = express();
 const PORT = process.env.PORT;
+const authorizedParties = (process.env.CLERK_AUTHORIZED_PARTIES || "http://localhost:5173,http://127.0.0.1:5173")
+	.split(",")
+	.map((value) => value.trim())
+	.filter(Boolean);
 
 const httpServer = createServer(app);
 initializeSocket(httpServer);
@@ -42,6 +47,13 @@ app.use(
 );
 
 app.use(express.json());
+
+app.use(
+	clerkMiddleware({
+		secretKey: process.env.CLERK_SECRET_KEY,
+		authorizedParties,
+	})
+);
 
 app.use(extractClerkAuth);
 
@@ -95,6 +107,7 @@ app.use("/api/history", historyRoutes);
 app.use("/api/recommendations", recommendationRoutes);
 app.use("/api", followRoutes);
 app.use("/api/feedback", feedbackRoutes);
+app.use("/api/publicmusic", publicMusicRoutes);
 
 if (process.env.NODE_ENV === "production") {
 	app.use(express.static(path.join(__dirname, "../frontend/dist")));

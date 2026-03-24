@@ -24,9 +24,26 @@ const songSchema = new mongoose.Schema(
 			type: String,
 			required: true,
 		},
+		playbackUrl: {
+			type: String,
+			required: false,
+			default: null,
+		},
 		duration: {
 			type: Number,
 			required: true,
+		},
+		source: {
+			type: String,
+			required: false,
+			default: "local",
+		},
+		externalVideoId: {
+			type: String,
+			required: false,
+			default: null,
+			unique: true,
+			sparse: true,
 		},
 		albumId: {
 			type: mongoose.Schema.Types.ObjectId,

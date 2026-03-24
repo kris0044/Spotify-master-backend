@@ -27,10 +27,13 @@ const getAuthorizedParties = (req) => {
 
 export const extractClerkAuth = async (req, res, next) => {
 	try {
+		if (req.auth?.userId) {
+			return next();
+		}
+
 		const authHeader = req.headers.authorization;
 
 		if (!authHeader || !authHeader.startsWith("Bearer ")) {
-			req.auth = { userId: null };
 			return next();
 		}
 
@@ -46,7 +49,6 @@ export const extractClerkAuth = async (req, res, next) => {
 		const sessionId = typeof payload?.sid === "string" ? payload.sid : null;
 
 		if (!userId) {
-			req.auth = { userId: null };
 			return next();
 		}
 
@@ -58,7 +60,6 @@ export const extractClerkAuth = async (req, res, next) => {
 		return next();
 	} catch (error) {
 		console.error("Token verification failed:", error?.message || error);
-		req.auth = { userId: null };
 		return next();
 	}
 };
