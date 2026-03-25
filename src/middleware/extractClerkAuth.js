@@ -1,5 +1,7 @@
 import { verifyToken } from "@clerk/express";
 
+const CLERK_CLOCK_SKEW_MS = 15000;
+
 const getRefererOrigin = (referer) => {
 	try {
 		return referer ? new URL(referer).origin : null;
@@ -43,6 +45,7 @@ export const extractClerkAuth = async (req, res, next) => {
 		const payload = await verifyToken(token, {
 			secretKey: process.env.CLERK_SECRET_KEY,
 			authorizedParties,
+			clockSkewInMs: CLERK_CLOCK_SKEW_MS,
 		});
 
 		const userId = typeof payload?.sub === "string" ? payload.sub : null;
