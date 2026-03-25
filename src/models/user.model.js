@@ -24,6 +24,32 @@ const userSchema = new mongoose.Schema(
 			type: Boolean,
 			default: false,
 		},
+		isOnline: {
+			type: Boolean,
+			default: false,
+		},
+		lastSeenAt: {
+			type: Date,
+			default: null,
+		},
+		currentActivity: {
+			type: String,
+			default: "Idle",
+		},
+		currentSong: {
+			title: {
+				type: String,
+				default: null,
+			},
+			artist: {
+				type: String,
+				default: null,
+			},
+			imageUrl: {
+				type: String,
+				default: null,
+			},
+		},
 	},
 	{ timestamps: true } //  createdAt, updatedAt
 );
