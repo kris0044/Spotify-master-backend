@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAllSongs, getFeaturedSongs, getMadeForYouSongs, getTrendingSongs, incrementPlayCount } from "../controller/song.controller.js";
+import { getAllSongs, getFeaturedSongs, getMadeForYouSongs, getSongById, getTrendingSongs, incrementPlayCount } from "../controller/song.controller.js";
 import { populateUser } from "../middleware/user.middleware.js";
 import { createCacheMiddleware, createInvalidationMiddleware } from "../middleware/cache.middleware.js";
 
@@ -12,6 +12,7 @@ router.get("/", createCacheMiddleware({ keyPrefix: "songs:list", ttlSeconds: 5 *
 router.get("/featured", getFeaturedSongs);
 router.get("/made-for-you", getMadeForYouSongs);
 router.get("/trending", getTrendingSongs);
+router.get("/:id", getSongById);
 router.post("/:id/play", createInvalidationMiddleware(["songs:list"]), incrementPlayCount);
 
 export default router;

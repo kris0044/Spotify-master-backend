@@ -50,6 +50,31 @@ export const getAllSongs = async (req, res, next) => {
 	}
 };
 
+export const getSongById = async (req, res, next) => {
+	try {
+		const { id } = req.params;
+		const song = await Song.findById(id);
+
+		if (!song) {
+			return res.status(404).json({ message: "Song not found" });
+		}
+
+		const isVisibleToUser =
+			req.user?.role === "admin" ||
+			song.isApproved === true ||
+			song.isApproved === undefined ||
+			song.isApproved === null;
+
+		if (!isVisibleToUser) {
+			return res.status(404).json({ message: "Song not found" });
+		}
+
+		res.status(200).json(song);
+	} catch (error) {
+		next(error);
+	}
+};
+
 export const getFeaturedSongs = async (req, res, next) => {
 	try {
 		// Only show approved songs to regular users

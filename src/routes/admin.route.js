@@ -15,6 +15,8 @@ import {
 	getPendingSongs,
 	getPendingAlbums,
 	getDashboardAnalytics,
+	getUserInsights,
+	getCommunityInsights,
 	getAllUsers,
 	updateUser,
 	deleteUser,
@@ -58,5 +60,7 @@ router.delete("/users/:id", createInvalidationMiddleware(["stats:list"]), delete
 
 // Dashboard analytics
 router.get("/analytics", getDashboardAnalytics);
+router.get("/user-insights", getUserInsights);
+router.get("/community-insights", getCommunityInsights);
 
 export default router;

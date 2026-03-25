@@ -2,6 +2,9 @@ import { Song } from "../models/song.model.js";
 import { Album } from "../models/album.model.js";
 import { PlayHistory } from "../models/playHistory.model.js";
 import { User } from "../models/user.model.js";
+import { Playlist } from "../models/playlist.model.js";
+import { Favorite } from "../models/favorite.model.js";
+import { Feedback } from "../models/feedback.model.js";
 import cloudinary from "../lib/cloudinary.js";
 import {
 	notifyNewsletterSubscribersAboutAlbum,
@@ -638,6 +641,192 @@ export const getDashboardAnalytics = async (req, res, next) => {
 	}
 };
 
+export const getUserInsights = async (req, res, next) => {
+	try {
+		const [overviewAggregation, rawPlaylists, topFavoritedSongs] = await Promise.all([
+			Promise.all([
+				Playlist.countDocuments(),
+				Playlist.distinct("userId"),
+				Favorite.countDocuments(),
+				Favorite.distinct("songId"),
+				Playlist.aggregate([
+					{
+						$group: {
+							_id: null,
+							totalSongs: { $sum: { $size: "$songs" } },
+							playlistCount: { $sum: 1 },
+						},
+					},
+				]),
+			]),
+			Playlist.find()
+				.populate("songs", "title artist imageUrl duration genre")
+				.sort({ updatedAt: -1 })
+				.limit(100)
+				.lean(),
+			Favorite.aggregate([
+				{
+					$group: {
+						_id: "$songId",
+						favoritesCount: { $sum: 1 },
+						lastFavoritedAt: { $max: "$createdAt" },
+					},
+				},
+				{ $sort: { favoritesCount: -1, lastFavoritedAt: -1 } },
+				{ $limit: 10 },
+				{
+					$lookup: {
+						from: "songs",
+						localField: "_id",
+						foreignField: "_id",
+						as: "song",
+					},
+				},
+				{ $unwind: "$song" },
+				{
+					$lookup: {
+						from: "users",
+						localField: "song.uploadedBy",
+						foreignField: "_id",
+						as: "uploadedBy",
+					},
+				},
+				{
+					$project: {
+						_id: "$song._id",
+						title: "$song.title",
+						artist: "$song.artist",
+						imageUrl: "$song.imageUrl",
+						genre: "$song.genre",
+						source: "$song.source",
+						playCount: "$song.playCount",
+						duration: "$song.duration",
+						favoritesCount: 1,
+						lastFavoritedAt: 1,
+						uploadedBy: {
+							$arrayElemAt: ["$uploadedBy", 0],
+						},
+					},
+				},
+			]),
+		]);
+
+		const [totalPlaylists, playlistCreators, totalFavoriteActions, uniqueFavoritedSongs, playlistTotals] = overviewAggregation;
+		const playlistOwnerIds = [...new Set(rawPlaylists.map((playlist) => playlist.userId).filter(Boolean))];
+		const owners = await User.find({ clerkId: { $in: playlistOwnerIds } }, "fullName imageUrl clerkId role createdAt").lean();
+		const ownerMap = new Map(owners.map((owner) => [owner.clerkId, owner]));
+
+		const playlists = rawPlaylists.map((playlist) => ({
+			_id: playlist._id,
+			name: playlist.name,
+			description: playlist.description || "",
+			userId: playlist.userId,
+			songCount: playlist.songs.length,
+			totalDuration: playlist.songs.reduce((total, song) => total + (song?.duration || 0), 0),
+			createdAt: playlist.createdAt,
+			updatedAt: playlist.updatedAt,
+			owner: ownerMap.get(playlist.userId) || null,
+			songs: playlist.songs,
+		}));
+
+		res.status(200).json({
+			overview: {
+				totalPlaylists,
+				activePlaylistCreators: playlistCreators.length,
+				totalFavoriteActions,
+				uniqueFavoritedSongs: uniqueFavoritedSongs.length,
+				avgSongsPerPlaylist: totalPlaylists ? Number(((playlistTotals[0]?.totalSongs || 0) / totalPlaylists).toFixed(1)) : 0,
+			},
+			playlists,
+			topFavoritedSongs: topFavoritedSongs,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const getCommunityInsights = async (req, res, next) => {
+	try {
+		const [subscribers, feedback, topAuthorsAggregation] = await Promise.all([
+			User.find({ newsletterSubscribed: true })
+				.select("fullName imageUrl clerkId role createdAt updatedAt")
+				.sort({ updatedAt: -1 })
+				.lean(),
+			Feedback.find()
+				.populate("author", "fullName imageUrl clerkId role")
+				.populate("song", "title artist imageUrl")
+				.populate("album", "title artist imageUrl")
+				.sort({ createdAt: -1 })
+				.lean(),
+			Feedback.aggregate([
+				{
+					$project: {
+						author: 1,
+						likesCount: { $size: "$likes" },
+						commentsCount: { $size: "$comments" },
+						createdAt: 1,
+					},
+				},
+				{
+					$group: {
+						_id: "$author",
+						feedbackCount: { $sum: 1 },
+						totalLikes: { $sum: "$likesCount" },
+						totalComments: { $sum: "$commentsCount" },
+						lastFeedbackAt: { $max: "$createdAt" },
+					},
+				},
+				{ $sort: { feedbackCount: -1, totalLikes: -1, lastFeedbackAt: -1 } },
+				{ $limit: 10 },
+				{
+					$lookup: {
+						from: "users",
+						localField: "_id",
+						foreignField: "_id",
+						as: "author",
+					},
+				},
+				{
+					$project: {
+						_id: 0,
+						feedbackCount: 1,
+						totalLikes: 1,
+						totalComments: 1,
+						lastFeedbackAt: 1,
+						author: { $arrayElemAt: ["$author", 0] },
+					},
+				},
+			]),
+		]);
+
+		const normalizedFeedback = feedback.map((item) => ({
+			_id: item._id,
+			content: item.content,
+			category: item.category,
+			createdAt: item.createdAt,
+			author: item.author,
+			likesCount: item.likes.length,
+			commentsCount: item.comments.length,
+			song: item.song,
+			album: item.album,
+		}));
+
+		res.status(200).json({
+			overview: {
+				newsletterSubscribers: subscribers.length,
+				totalFeedback: normalizedFeedback.length,
+				totalFeedbackLikes: normalizedFeedback.reduce((sum, item) => sum + item.likesCount, 0),
+				totalFeedbackComments: normalizedFeedback.reduce((sum, item) => sum + item.commentsCount, 0),
+			},
+			subscribers,
+			feedback: normalizedFeedback,
+			topAuthors: topAuthorsAggregation,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
 export const getAllUsers = async (req, res, next) => {
 	try {
 		const users = await User.find().sort({ createdAt: -1 });
@@ -688,4 +877,8 @@ export const deleteUser = async (req, res, next) => {
 		next(error);
 	}
 };
+
+
+
+
 
