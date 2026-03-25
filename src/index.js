@@ -32,7 +32,10 @@ dotenv.config();
 const __dirname = path.resolve();
 const app = express();
 const PORT = process.env.PORT;
-const authorizedParties = (process.env.CLERK_AUTHORIZED_PARTIES || "http://localhost:5173,http://127.0.0.1:5173")
+const authorizedParties = (
+	process.env.CLERK_AUTHORIZED_PARTIES ||
+	"http://localhost:5173,http://127.0.0.1:5173,https://spotify-master.onrender.com"
+)
 	.split(",")
 	.map((value) => value.trim())
 	.filter(Boolean);
