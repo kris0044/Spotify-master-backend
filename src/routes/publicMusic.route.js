@@ -1,8 +1,16 @@
 import { Router } from "express";
-import { getPublicMusicCharts, resolvePublicMusicSong, searchPublicMusic } from "../controller/publicMusic.controller.js";
+import {
+	getPublicMusicAlbum,
+	getPublicMusicCharts,
+	resolvePublicMusicSong,
+	searchPublicMusic,
+	searchPublicMusicAlbums,
+} from "../controller/publicMusic.controller.js";
 
 const router = Router();
 
+router.get("/albums", searchPublicMusicAlbums);
+router.get("/albums/:albumId", getPublicMusicAlbum);
 router.get("/search", searchPublicMusic);
 router.get("/charts", getPublicMusicCharts);
 router.post("/resolve", resolvePublicMusicSong);

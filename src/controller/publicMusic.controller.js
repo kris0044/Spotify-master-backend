@@ -26,6 +26,16 @@ const mapPublicMusicSong = (song, rank = null, internalSongId = null) => ({
 	internalSongId,
 });
 
+const mapPublicMusicAlbum = (album, songs = [], trackCount = songs.length) => ({
+	albumId: album.albumId,
+	title: album.name,
+	artist: album.artist?.name || "Unknown artist",
+	releaseYear: album.year ?? 0,
+	imageUrl: album.thumbnails?.at(-1)?.url || album.thumbnails?.[0]?.url || "",
+	trackCount: trackCount || 0,
+	songs,
+});
+
 const attachInternalSongIds = async (songs) => {
 	const videoIds = songs.map((song) => song.videoId).filter(Boolean);
 	const existingSongs = await Song.find({ externalVideoId: { $in: videoIds } }).select("_id externalVideoId").lean();
@@ -125,6 +135,61 @@ export const getPublicMusicCharts = async (req, res, next) => {
 			},
 			songs: topVideos.map((song, index) => mapPublicMusicSong(song, index + 1, songIdByVideoId.get(song.videoId) || null)),
 		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const searchPublicMusicAlbums = async (req, res, next) => {
+	try {
+		const query = String(req.query.q || "").trim();
+		const limit = Math.max(1, Math.min(Number(req.query.limit) || 12, 20));
+
+		if (!query) {
+			return res.status(400).json({ message: "Search query is required" });
+		}
+
+		const client = await getYTMusicClient();
+		const albums = await client.searchAlbums(query);
+		const selectedAlbums = albums.slice(0, limit);
+		const detailedAlbums = await Promise.allSettled(
+			selectedAlbums.map((album) => client.getAlbum(album.albumId))
+		);
+		const detailedAlbumById = new Map(
+			detailedAlbums
+				.map((result, index) =>
+					result.status === "fulfilled"
+						? [selectedAlbums[index].albumId, result.value]
+						: null
+				)
+				.filter(Boolean)
+		);
+		const mappedAlbums = selectedAlbums.map((album) => {
+			const detailedAlbum = detailedAlbumById.get(album.albumId);
+			return mapPublicMusicAlbum(album, [], detailedAlbum?.songs?.length || 0);
+		});
+
+		res.status(200).json({
+			albums: mappedAlbums,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const getPublicMusicAlbum = async (req, res, next) => {
+	try {
+		const albumId = String(req.params.albumId || "").trim();
+
+		if (!albumId) {
+			return res.status(400).json({ message: "Album ID is required" });
+		}
+
+		const client = await getYTMusicClient();
+		const album = await client.getAlbum(albumId);
+		const songs = await attachInternalSongIds(album.songs || []);
+
+		res.status(200).json(mapPublicMusicAlbum(album, songs));
 	} catch (error) {
 		next(error);
 	}
